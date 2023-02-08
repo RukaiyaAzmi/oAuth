@@ -60,6 +60,23 @@ var email = "rukaiyaazmi@gmail.com";
 var random = Math.random().toString();
 const cID = crypto.createHash('sha256').update(email+random).digest();
 
+// export async function getAccessToken(body, expireTime) {
+//   return new Promise((resolve, reject) => {
+    const payload = {
+       email: "rukaiyaazmi@gmail.com",
+       name: "rukaiya"
+    }
+    try {
+      const secret = "rukaiyaazmi@gmail.com";
+      const accessToken = jwt.sign(payload, secret);
+      console.log("token: ", accessToken)
+    } catch (ex) {
+      
+    }
+    
+//   });
+// }
+
 function base64URLEncode(str) {
   return str.toString('base64')
       .replace(/\+/g, '')
@@ -98,136 +115,206 @@ function sha256(buffer) {
 }
 var challenge = base64URLEncode(sha256(verifier));
 
-app.get('/', (req, res) => {
-  res.render('index');
-});
 
-app.get('/profile', (req, res) => {
-  const { idToken, decodedIdToken } = req.session;
 
-  const logoutUrl = `https://${
-    process.env.OIDC_PROVIDER
-  }/v2/logout?${query_string.stringify({
-    returnTo: 'http://localhost:3000/logout'
-  })}`;
 
-  res.render('profile', {
-    idToken,
-    decodedIdToken,
-    logoutUrl
+//PKI RSA
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
+    // The standard secure default length for RSA keys is 2048 bits
+    modulusLength: 2048,
   });
+console.log(publicKey, privateKey)
+const data = "my secret data";
+const encryptedData = crypto.publicEncrypt(
+  
+  {
+    key: publicKey,
+    padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+    oaepHash: "sha256",
+  },
+  // We convert the data string to a buffer using `Buffer.from`
+  Buffer.from(data)
+);
+const encrypted = base64URLEncode(encryptedData)
+// The encrypted data is in the form of bytes, so we print it in base64 format
+// so that it's displayed in a more readable form
+console.log("encypted data: ", encrypted);
+
+const decryptedData = crypto.privateDecrypt(
+  {
+    key: privateKey,
+    // In order to decrypt the data, we need to specify the
+    // same hashing function and padding scheme that we used to
+    // encrypt the data in the previous step
+    padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+    oaepHash: "sha256",
+  },
+  encryptedData
+);
+
+// The decrypted data is of the Buffer type, which we can convert to a
+// string to reveal the original data
+console.log("decrypted data: ", decryptedData.toString());
+
+const verifiableData = "this need to be verified";
+
+// The signature method takes the data we want to sign, the
+// hashing algorithm, and the padding scheme, and generates
+// a signature in the form of bytes
+const signature = crypto.sign("sha256", Buffer.from(verifiableData), {
+  key: privateKey,
+  padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
 });
 
-app.get('/login', (req, res) => {
-  const authorizationEndpoint = oidcProviderInfo['authorization_endpoint'];
-  const responseType = 'code';
-  const scope = 'openid email profile read:to-dos';
-  const clientID = process.env.CLIENT_ID;
-  const redirectUri = 'http://localhost:3000/callback';
-  const responseMode = 'query';
-  const nonce = crypto.randomBytes(16).toString('hex');
-  const audience = process.env.API_IDENTIFIER;
-  const code_challenge = challenge;
-  const code_verifier = verifier;
+console.log(signature.toString("base64"));
 
-  const options = {
-    maxAge: 1000 * 60 * 15,
-    httpOnly: true, // The cookie only accessible by the web server
-    signed: true // Indicates if the cookie should be signed
-  };
+// To verify the data, we provide the same hashing algorithm and
+// padding scheme we provided to generate the signature, along
+// with the signature itself, the data that we want to
+// verify against the signature, and the public key
+const isVerified = crypto.verify(
+  "sha256",
+  Buffer.from(verifiableData),
+  {
+    key: publicKey,
+    padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+  },
+  signature
+);
 
-  const authURL = `${authorizationEndpoint}?${query_string.stringify({
-    response_mode: responseMode,
-    response_type: responseType,
-    scope: scope,
-    client_id: clientID,
-    redirect_uri: redirectUri,
-    nonce: nonce,
-    audience: audience
-  })}`;
+// isVerified should be `true` if the signature is valid
+console.log("signature verified: ", isVerified);
 
-  //console.log(authURL);
+// app.get('/', (req, res) => {
+//   res.render('index');
+// });
 
-  res.cookie(nonceCookie, nonce, options).redirect(authURL);
-});
+// app.get('/profile', (req, res) => {
+//   const { idToken, decodedIdToken } = req.session;
 
-app.get('/callback', async (req, res) => {
-  const { code } = req.query;
-  const codeExchangeOptions = {
-    grant_type: 'authorization_code',
-    client_id: process.env.CLIENT_ID,
-    //client_secret: process.env.CLIENT_SECRET,
-    code: code,
-    code_challenge: challenge,
-    code_verifier: verifier,
-    redirect_uri: 'http://localhost:3000/callback'
-  };
+//   const logoutUrl = `https://${
+//     process.env.OIDC_PROVIDER
+//   }/v2/logout?${query_string.stringify({
+//     returnTo: 'http://localhost:3000/logout'
+//   })}`;
 
-  const codeExchangeResponse = await request.post(
-    `https://${process.env.OIDC_PROVIDER}/oauth/token`,
-    { form: codeExchangeOptions }
-  );
+//   res.render('profile', {
+//     idToken,
+//     decodedIdToken,
+//     logoutUrl
+//   });
+// });
 
-  const tokens = JSON.parse(codeExchangeResponse);
+// app.get('/login', (req, res) => {
+//   const authorizationEndpoint = oidcProviderInfo['authorization_endpoint'];
+//   const responseType = 'code';
+//   const scope = 'openid email profile read:to-dos';
+//   const clientID = process.env.CLIENT_ID;
+//   const redirectUri = 'http://localhost:3000/callback';
+//   const responseMode = 'query';
+//   const nonce = crypto.randomBytes(16).toString('hex');
+//   const audience = process.env.API_IDENTIFIER;
+//   const code_challenge = challenge;
+//   const code_verifier = verifier;
 
-  req.session.accessToken = tokens.access_token;
-console.log(req.session)
-  // extract nonce from cookie
-  const nonce = req.signedCookies[nonceCookie];
-  delete req.signedCookies[nonceCookie];
+//   const options = {
+//     maxAge: 1000 * 60 * 15,
+//     httpOnly: true, // The cookie only accessible by the web server
+//     signed: true // Indicates if the cookie should be signed
+//   };
 
-  try {
-    req.session.decodedIdToken = validateIDToken(tokens.id_token, nonce);
-    req.session.idToken = tokens.id_token;
-    res.redirect('/profile');
-  } catch (error) {
-    res.status(401).send();
-  }
-});
+//   const authURL = `${authorizationEndpoint}?${query_string.stringify({
+//     response_mode: responseMode,
+//     response_type: responseType,
+//     scope: scope,
+//     client_id: clientID,
+//     redirect_uri: redirectUri,
+//     nonce: nonce,
+//     audience: audience
+//   })}`;
 
-app.get('/to-dos', async (req, res) => {
-  const delegatedRequestOptions = {
-    url: 'http://localhost:3001',
-    headers: {
-      Authorization: `Bearer ${req.session.accessToken}`
-    }
-  };
+//   //console.log(authURL);
 
-  try {
-    const delegatedResponse = await request(delegatedRequestOptions);
-    const toDos = JSON.parse(delegatedResponse);
+//   res.cookie(nonceCookie, nonce, options).redirect(authURL);
+// });
 
-    res.render('to-dos', {
-      toDos
-    });
-  } catch (error) {
-    res.status(error.statusCode).send(error);
-  }
-});
+// app.get('/callback', async (req, res) => {
+//   const { code } = req.query;
+//   const codeExchangeOptions = {
+//     grant_type: 'authorization_code',
+//     client_id: process.env.CLIENT_ID,
+//     //client_secret: process.env.CLIENT_SECRET,
+//     code: code,
+//     code_challenge: challenge,
+//     code_verifier: verifier,
+//     redirect_uri: 'http://localhost:3000/callback'
+//   };
 
-app.get('/logout', async (req, res) => {
-  //console.log('Logout called');
-  req.session.destroy();
-  res.redirect('/');
-});
+//   const codeExchangeResponse = await request.post(
+//     `https://${process.env.OIDC_PROVIDER}/oauth/token`,
+//     { form: codeExchangeOptions }
+//   );
 
-app.get('/remove-to-do/:id', async (req, res) => {
-  res.status(501).send();
-});
+//   const tokens = JSON.parse(codeExchangeResponse);
 
-const { OIDC_PROVIDER } = process.env;
-const discEnd = `https://${OIDC_PROVIDER}/.well-known/openid-configuration`;
-//console.log(discEnd)
-request(discEnd)
-  .then(res => {
-    oidcProviderInfo = JSON.parse(res);
-    //console.log(oidcProviderInfo);
-    app.listen(3000, () => {
-      //console.log(`Server running on http://localhost:3000`);
-    });
-  })
-  .catch(error => {
-    //console.error(error);
-    //console.error(`Unable to get OIDC endpoints for ${OIDC_PROVIDER}`);
-    process.exit(1);
-  });
+//   req.session.accessToken = tokens.access_token;
+// console.log(req.session)
+//   // extract nonce from cookie
+//   const nonce = req.signedCookies[nonceCookie];
+//   delete req.signedCookies[nonceCookie];
+
+//   try {
+//     req.session.decodedIdToken = validateIDToken(tokens.id_token, nonce);
+//     req.session.idToken = tokens.id_token;
+//     res.redirect('/profile');
+//   } catch (error) {
+//     res.status(401).send();
+//   }
+// });
+
+// app.get('/to-dos', async (req, res) => {
+//   const delegatedRequestOptions = {
+//     url: 'http://localhost:3001',
+//     headers: {
+//       Authorization: `Bearer ${req.session.accessToken}`
+//     }
+//   };
+
+//   try {
+//     const delegatedResponse = await request(delegatedRequestOptions);
+//     const toDos = JSON.parse(delegatedResponse);
+
+//     res.render('to-dos', {
+//       toDos
+//     });
+//   } catch (error) {
+//     res.status(error.statusCode).send(error);
+//   }
+// });
+
+// app.get('/logout', async (req, res) => {
+//   //console.log('Logout called');
+//   req.session.destroy();
+//   res.redirect('/');
+// });
+
+// app.get('/remove-to-do/:id', async (req, res) => {
+//   res.status(501).send();
+// });
+
+// const { OIDC_PROVIDER } = process.env;
+// const discEnd = `https://${OIDC_PROVIDER}/.well-known/openid-configuration`;
+// //console.log(discEnd)
+// request(discEnd)
+//   .then(res => {
+//     oidcProviderInfo = JSON.parse(res);
+//     //console.log(oidcProviderInfo);
+//     app.listen(3000, () => {
+//       //console.log(`Server running on http://localhost:3000`);
+//     });
+//   })
+//   .catch(error => {
+//     //console.error(error);
+//     //console.error(`Unable to get OIDC endpoints for ${OIDC_PROVIDER}`);
+//     process.exit(1);
+//   });
